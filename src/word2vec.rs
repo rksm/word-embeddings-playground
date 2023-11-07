@@ -22,25 +22,28 @@ pub fn convert_one_hot_to_tensor(
     one_hot: u32,
     n: usize,
 ) -> candle_core::Result<candle_core::Tensor> {
-    let mut numbers = vec![0u32; n];
+    let mut numbers = vec![0f32; n];
 
     (0..n).for_each(|i| {
         if one_hot & (1 << i) != 0 {
-            numbers[i] = 1;
+            numbers[i] = 1.0;
         }
     });
 
     // Tensor::from_vec(numbers, n, &Device::Cpu)
-    Tensor::from_iter(numbers, &Device::Cpu)
+    Tensor::from_iter(numbers, &Device::Cpu)?.unsqueeze(0)
 }
 
 /// Convert a one-hot encoded tensor to a number
-pub fn tensor_to_number(t: &Tensor) -> Result<u32> {
-    let mut number = 0;
+pub fn tensor_to_number(t: &Tensor, n: usize) -> Result<u32> {
+    let t = t.reshape((n,))?;
+    let mut number = 0u32;
+    let mut max = -1.0;
 
     for (i, v) in t.to_vec1::<f32>()?.iter().enumerate() {
-        if *v > 0.5 {
-            number |= 1 << i;
+        if *v > max {
+            max = *v;
+            number = i as u32;
         }
     }
 
@@ -74,22 +77,6 @@ impl Word2VecNN {
     }
 }
 
-fn softmax(x: &Tensor) -> Result<Tensor> {
-    let exp = x.exp()?;
-    let sum = exp.sum(0)?;
-    exp.broadcast_div(&sum)
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn softmax_test() {
-        let x =
-            candle_core::Tensor::from_vec(vec![1f32, 2f32, 3f32], (3,), &candle_core::Device::Cpu)
-                .unwrap();
-        let y = super::softmax(&x).unwrap();
-        let expected = vec![0.090_030_57, 0.244_728_48, 0.665_240_94];
-        let actual = y.to_vec1::<f32>().unwrap();
-        assert_eq!(expected, actual);
-    }
+pub fn train() -> Result<()> {
+    todo!()
 }
