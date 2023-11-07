@@ -1,13 +1,15 @@
 use anyhow::Result;
 use kdam::tqdm;
-use std::path::{Path, PathBuf};
+use std::{collections::HashMap, path::Path};
 
+#[allow(dead_code)]
 #[derive(serde::Deserialize)]
 struct Transcript {
     id: String,
     segments: Vec<Segment>,
 }
 
+#[allow(dead_code)]
 #[derive(serde::Deserialize)]
 struct Segment {
     speaker: String,
@@ -28,15 +30,18 @@ const STOPWORDS_FILE: &str = "./data/stopwords-de.txt";
 
 /// Contains the texts but only with words from the vocab. One word per line in
 /// the order of the texts in the transcripts. Used for training.
-const CONTEXT_FILE: &str = "./data/doppelgaenger-only-vocab.txt";
+// const CONTEXT_FILE: &str = "./data/context.txt";
+const CONTEXT_FILE: &str = "./data/context-tiny.txt";
 
 #[derive(Default)]
 pub struct Vocab {
     pub words: Vec<String>,
-    pub one_hot_encoded: Vec<u32>,
+    pub words_by_index: HashMap<String, usize>,
+    pub context_word_indices: Vec<usize>,
 }
 
 impl Vocab {
+    #[allow(dead_code)]
     pub fn build_from_scratch() -> Result<Self> {
         step1_transcripts_to_text()?;
         step2_combine_texts(CORPUS_FILE)?;
@@ -46,22 +51,90 @@ impl Vocab {
         Self::from_files()
     }
 
+    #[allow(dead_code)]
     pub fn from_files() -> Result<Self> {
-        let (words, one_hot_encoded) = vocab_one_hot_encoded(VOCAB_FILE)?;
+        let words = std::fs::read_to_string(VOCAB_FILE)?
+            .lines()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+
+        let words_by_index = words
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.to_string(), i))
+            .collect::<HashMap<_, _>>();
+
+        // read the context file and map each word to its index in the vocab
+
+        // dbg!(&words_by_index);
+        let context = std::fs::read_to_string(CONTEXT_FILE)?;
+        let context_words = context.lines().collect::<Vec<_>>();
+        let context_word_indices = context_words
+            .iter()
+            .filter_map(|s| words_by_index.get(*s))
+            .copied()
+            .collect::<Vec<_>>();
+
         Ok(Self {
             words,
-            one_hot_encoded,
+            words_by_index,
+            context_word_indices,
         })
     }
 
     pub fn n(&self) -> usize {
         self.words.len()
     }
+
+    pub fn context_n(&self) -> usize {
+        self.context_word_indices.len()
+    }
+
+    /// Looks up the word at `index` in the context text. Returns the indices of the
+    /// 2 words before and after. Also returns the index of the word itself.
+    pub fn context(&self, index: usize) -> ([usize; 4], usize) {
+        let n = self.context_n();
+        let mut context = [0; 4];
+        let lookup = |index: usize| -> usize { self.context_word_indices[index] };
+
+        match index {
+            0 => {
+                context[2] = lookup(index + 1);
+                context[3] = lookup(index + 2);
+            }
+            1 => {
+                context[1] = lookup(index - 1);
+                context[2] = lookup(index + 1);
+                context[3] = lookup(index + 2);
+            }
+            _ if index == n - 1 => {
+                context[0] = lookup(index - 2);
+                context[1] = lookup(index - 1);
+            }
+            _ if index == n - 2 => {
+                context[0] = lookup(index - 2);
+                context[1] = lookup(index - 1);
+                context[2] = lookup(index + 1);
+            }
+            _ => {
+                context[0] = lookup(index - 2);
+                context[1] = lookup(index - 1);
+                context[2] = lookup(index + 1);
+                context[3] = lookup(index + 2);
+            }
+        }
+
+        (context, lookup(index))
+    }
+
+    pub fn word_lookup(&self, idx: usize) -> &str {
+        &self.words[idx]
+    }
 }
 
 fn step1_transcripts_to_text() -> Result<()> {
     let mut files = Vec::new();
-    for f in std::fs::read_dir(DATA_DIR)? {
+    for f in std::fs::read_dir(DATA_DIR)?.take(1) {
         let f = f?;
         if f.file_type()?.is_file() && f.path().extension() == Some("json".as_ref()) {
             files.push(f.path());
@@ -168,23 +241,4 @@ fn step4_build_text_with_only_vocab(vocab_file: impl AsRef<Path>) -> Result<()> 
     }
 
     Ok(())
-}
-
-fn vocab_one_hot_encoded(vocab_file: impl AsRef<Path>) -> Result<(Vec<String>, Vec<u32>)> {
-    info!("vocab_one_hot_encoded()");
-
-    let text = std::fs::read_to_string(vocab_file)?;
-    let words = text
-        .split_whitespace()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>();
-
-    let n = words.len();
-    let mut one_hot = vec![0; n];
-
-    for i in tqdm!(0..n) {
-        one_hot[i] = 1 << i;
-    }
-
-    Ok((words, one_hot))
 }

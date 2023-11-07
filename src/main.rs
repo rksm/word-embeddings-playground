@@ -18,47 +18,63 @@ fn main() {
 }
 
 fn run() -> Result<()> {
+    // let vocab = vocab_builder::Vocab::build_from_scratch().expect("Failed to build vocab");
     let vocab = vocab_builder::Vocab::from_files().expect("Failed to build vocab");
     let n = vocab.n();
-    let dataset = DatasetOptions::new()
-        .batch_size(100)
-        .epochs(1000)
-        .vocab(vocab)
-        .build()
-        .expect("Failed to build dataset");
 
-    let varmap = VarMap::new();
-    let vs = VarBuilder::from_varmap(&varmap, DType::F32, &word2vec::DEVICE);
-    const EMBEDDING_SIZE: usize = 100;
-    const LEARNING_RATE: f64 = 0.05;
-    let nn = word2vec::Word2VecNN::new(n, EMBEDDING_SIZE, vs.clone())?;
-    let mut sgd = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
-
-    for (i, epoch) in dataset.epochs.into_iter().enumerate() {
-        println!("epoch {i}");
-
-        let n_batches = epoch.batches.len();
-        let mut avg_loss = 0.0;
-
-        for batch in epoch.batches.into_iter() {
-            let x = batch.x;
-            let y = batch.y;
-            // dbg!(x.shape());
-            // dbg!(y.shape());
-            let logits = nn.forward(&x)?;
-            // dbg!(logits.shape());
-            // dbg!(logits.to_vec2::<f32>()?);
-            let log_sm = ops::log_softmax(&logits, D::Minus1)?;
-            // dbg!(y.to_vec1::<u32>()?);
-            let loss = loss::nll(&log_sm, &y)?;
-            let loss_scalar = loss.mean_all()?.to_scalar::<f32>()?;
-            // println!("loss: {loss_scalar}");
-            sgd.backward_step(&loss)?;
-
-            avg_loss += loss_scalar;
+    if true {
+        let (context, target) = vocab.context(4);
+        dbg!(context);
+        dbg!(target);
+        for ea in context {
+            dbg!((vocab.word_lookup(ea)));
         }
+        dbg!(vocab.word_lookup(target));
+    }
 
-        println!("avg_loss: {}", avg_loss / n_batches as f32);
+    println!("----------------");
+
+    if false {
+        let dataset = DatasetOptions::new()
+            .batch_size(20)
+            .epochs(100)
+            .vocab(vocab)
+            .build()
+            .expect("Failed to build dataset");
+
+        let varmap = VarMap::new();
+        let vs = VarBuilder::from_varmap(&varmap, DType::F32, &word2vec::DEVICE);
+        const EMBEDDING_SIZE: usize = 100;
+        const LEARNING_RATE: f64 = 0.05;
+        let nn = word2vec::Word2VecNN::new(n, EMBEDDING_SIZE, vs.clone())?;
+        let mut sgd = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
+
+        for (i, epoch) in dataset.epochs.into_iter().enumerate() {
+            println!("epoch {i}");
+
+            let n_batches = epoch.batches.len();
+            let mut avg_loss = 0.0;
+
+            for batch in epoch.batches.into_iter() {
+                let x = batch.x;
+                let y = batch.y;
+                // dbg!(x.shape());
+                // dbg!(y.shape());
+                let logits = nn.forward(&x)?;
+                // dbg!(logits.shape());
+                // dbg!(logits.to_vec2::<f32>()?);
+                let log_sm = ops::log_softmax(&logits, D::Minus1)?;
+                // dbg!(y.to_vec1::<u32>()?);
+                let loss = loss::nll(&log_sm, &y)?;
+                let loss_scalar = loss.mean_all()?.to_scalar::<f32>()?;
+                // println!("loss: {loss_scalar}");
+                sgd.backward_step(&loss)?;
+
+                avg_loss += loss_scalar;
+            }
+
+            println!("avg_loss: {}", avg_loss / n_batches as f32);
+        }
     }
 
     // for (x, y) in xs.iter().zip(ys.iter()) {}

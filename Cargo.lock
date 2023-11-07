@@ -1015,6 +1015,7 @@ dependencies = [
  "rust_tokenizers",
  "serde",
  "serde_json",
+ "yoke",
 ]
 
 [[package]]

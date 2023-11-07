@@ -28,23 +28,6 @@ pub fn foo() -> Result<()> {
     Ok(())
 }
 
-pub fn convert_one_hot_to_tensor(
-    one_hot: Vec<u32>,
-    n: usize,
-) -> candle_core::Result<candle_core::Tensor> {
-    let numbers = one_hot
-        .iter()
-        .flat_map(|&i| one_hot_to_vec(i, n))
-        .collect::<Vec<_>>();
-    Tensor::from_vec(numbers, (one_hot.len(), n), &DEVICE)
-}
-
-pub fn one_hot_to_vec(one_hot: u32, n: usize) -> Vec<f32> {
-    (0..n)
-        .map(move |i| if one_hot & (1 << i) != 0 { 1.0 } else { 0.0 })
-        .collect()
-}
-
 /// Convert a one-hot encoded tensor to a number
 pub fn tensor_to_number(t: &Tensor, n: usize) -> Result<u32> {
     let t = t.reshape((n,))?;
@@ -62,13 +45,14 @@ pub fn tensor_to_number(t: &Tensor, n: usize) -> Result<u32> {
 }
 
 pub struct Word2VecNN {
-    projection_layer: candle_nn::Linear,
+    projection_layer: candle_nn::Embedding,
     output_layer: candle_nn::Linear,
 }
 
 impl Word2VecNN {
     pub fn new(vocab_size: usize, embedding_size: usize, vs: VarBuilder) -> Result<Self> {
-        let projection_layer = candle_nn::linear(vocab_size, embedding_size, vs.pp("projection"))?;
+        let projection_layer =
+            candle_nn::embedding(vocab_size, embedding_size, vs.pp("projection"))?;
         let output_layer = candle_nn::linear(embedding_size, vocab_size, vs.pp("output"))?;
 
         Ok(Self {
@@ -86,8 +70,4 @@ impl Word2VecNN {
         let xs = self.output_layer.forward(&xs)?;
         Ok(xs)
     }
-}
-
-pub fn train() -> Result<()> {
-    todo!()
 }
