@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use candle_core::{
     safetensors::{load, save},
@@ -20,6 +20,21 @@ lazy_static! {
 
 lazy_static! {
     static ref ZEROES: Tensor = Tensor::zeros((1,), DType::F32, &DEVICE).unwrap();
+}
+
+#[derive(clap::ValueEnum, Debug, Clone, Copy)]
+pub enum Method {
+    Cbow,
+    SkipGram,
+}
+
+impl Display for Method {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Method::Cbow => write!(f, "cbow"),
+            Method::SkipGram => write!(f, "skipgram"),
+        }
+    }
 }
 
 pub fn foo() -> Result<()> {
@@ -91,6 +106,45 @@ impl Word2VecNN {
 
     pub fn save(&self, file: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
         let file = file.as_ref();
+
+        // backups
+        if let Some(dir) = file.parent() {
+            let fname = file.file_name().unwrap().to_string_lossy();
+            let mut prev_files = std::fs::read_dir(dir)?
+                .filter_map(|f| f.ok())
+                .filter_map(|f| {
+                    let n = f.file_name();
+                    let n = n.to_string_lossy();
+                    if !n.starts_with(&*fname) {
+                        return None;
+                    }
+                    let n = n.trim_start_matches(&*fname);
+                    if n.is_empty() {
+                        return None;
+                    }
+                    let n = n.trim_start_matches('.');
+                    if n.is_empty() {
+                        return None;
+                    }
+                    let n = n.parse::<u8>().ok()?;
+                    Some((n, f.path()))
+                })
+                .collect::<Vec<_>>();
+            prev_files.sort_by_key(|(n, _)| *n);
+            for (n, f) in prev_files {
+                if n > 10 {
+                    std::fs::remove_file(f)?;
+                    continue;
+                }
+                let new_name = format!("{}.{}", fname, n + 1);
+                std::fs::rename(f, dir.join(new_name))?;
+            }
+        }
+
+        if file.exists() {
+            std::fs::rename(file, file.with_extension("1"))?;
+        }
+
         // let embeddings_file = dir.join("embeddings.bin");
         // let output_file = dir.join("output.bin");
 

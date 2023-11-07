@@ -1,7 +1,7 @@
+use candle_core::{DType, Result, Tensor};
+use candle_nn::{loss, Optimizer, VarBuilder, VarMap};
+use clap::Parser;
 use std::path::PathBuf;
-
-use candle_core::{DType, Result, Tensor, D};
-use candle_nn::{loss, ops, Optimizer, VarBuilder, VarMap};
 
 #[macro_use]
 extern crate log;
@@ -10,12 +10,21 @@ mod dataset;
 mod vocab_builder;
 mod word2vec;
 
-use crate::dataset::DatasetOptions;
+use crate::dataset::{Batch, DatasetOptions};
+
+#[derive(Parser)]
+struct Args {
+    #[clap(long, action, default_value = "false")]
+    adjust_learning_rate: bool,
+
+    #[clap(long, default_value_t = word2vec::Method::Cbow)]
+    method: word2vec::Method,
+}
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
 
-    run().expect("Failed to run");
+    run(Args::parse()).expect("Failed to run");
     // run2();
 }
 
@@ -23,7 +32,12 @@ const EPOCHS: usize = 100;
 const EMBEDDING_SIZE: usize = 100;
 const LEARNING_RATE: f64 = 0.05;
 
-fn run() -> Result<()> {
+fn run(args: Args) -> Result<()> {
+    let Args {
+        adjust_learning_rate,
+        method,
+    } = args;
+
     // let vocab = vocab_builder::Vocab::build_from_scratch().expect("Failed to build vocab");
     let vocab = vocab_builder::Vocab::from_files().expect("Failed to build vocab");
     let n = dbg!(vocab.n());
@@ -40,7 +54,7 @@ fn run() -> Result<()> {
 
     println!("----------------");
 
-    let load = false;
+    let load = true;
     let save = true;
     let nn_file = PathBuf::from("data/word2vec.nn");
 
@@ -68,7 +82,7 @@ fn run() -> Result<()> {
     if true {
         let dataset = DatasetOptions::new(&vocab)
             .batch_size(20)
-            .batches_per_epoch(500)
+            .batches_per_epoch(5000)
             .epochs(EPOCHS)
             .build()
             .expect("Failed to build dataset");
@@ -81,45 +95,72 @@ fn run() -> Result<()> {
         } else {
             word2vec::Word2VecNN::new(n, EMBEDDING_SIZE, vs.clone())?
         };
-        let mut sgd = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
+
+        let mut optim = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
+        // let mut optim = candle_nn::AdamW::new(
+        //     varmap.all_vars(),
+        //     candle_nn::ParamsAdamW {
+        //         lr: LEARNING_RATE,
+        //         ..Default::default()
+        //     },
+        // )?;
 
         for (i, epoch) in dataset.epochs.into_iter().enumerate() {
             print!("epoch {i}/{EPOCHS} ");
 
             let mut avg_loss = 0.0;
+            let mut last_loss = None;
             let mut n_batches = 0;
 
-            for (j, batch) in epoch.enumerate() {
+            for (j, Batch { x, y }) in epoch.enumerate() {
                 n_batches += 1;
-                let x = batch.x;
-                let y = batch.y;
-                // dbg!(x.shape());
-                // dbg!(x.to_vec2::<u32>()?);
-                // dbg!(y.shape());
                 let logits = nn.forward(&x).expect("Failed to forward");
-                // dbg!(logits.shape());
-                // dbg!(logits.to_vec2::<f32>()?);
-                let log_sm = ops::log_softmax(&logits, D::Minus1).expect("Failed to log_softmax");
-                // dbg!(y.to_vec1::<u32>()?);
-                let loss = loss::nll(&log_sm, &y).expect("Failed to nll");
+                let loss = loss::cross_entropy(&logits, &y).expect("Failed to compute loss");
                 let loss_scalar = loss
                     .mean_all()?
                     .to_scalar::<f32>()
                     .expect("Failed to to_scalar");
-                // println!("loss: {loss_scalar}");
-                sgd.backward_step(&loss).expect("Failed to backward_step");
+                optim.backward_step(&loss).expect("Failed to backward_step");
 
                 avg_loss += loss_scalar;
 
                 if j % 250 == 0 {
                     println!(
-                        "epoch {i} batch {j} loss: {loss_scalar} avg_loss: {}",
-                        avg_loss / n_batches as f32
+                        "epoch {i} batch {j} loss: {loss_scalar} avg_loss: {} lr: {}",
+                        avg_loss / n_batches as f32,
+                        optim.learning_rate(),
                     );
+
+                    if adjust_learning_rate {
+                        if let Some(last_loss) = last_loss {
+                            let delta = last_loss - loss_scalar;
+                            match f32::abs(delta) {
+                                delta if delta > 0.75 => {
+                                    let lr = optim.learning_rate();
+                                    let new_lr = lr * 0.75;
+                                    warn!("adjusting learning rate from {} to {}", lr, new_lr);
+                                    optim.set_learning_rate(new_lr);
+                                }
+                                delta if delta < 0.01 => {
+                                    let lr = optim.learning_rate();
+                                    let new_lr = lr * 1.1;
+                                    warn!("adjusting learning rate from {} to {}", lr, new_lr);
+                                    optim.set_learning_rate(new_lr);
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+
+                    last_loss = Some(loss_scalar);
                 }
             }
 
-            println!("avg_loss: {}", avg_loss / n_batches as f32);
+            println!(
+                "avg_loss: {} lr: {}",
+                avg_loss / n_batches as f32,
+                optim.learning_rate()
+            );
             if save {
                 nn.save(&nn_file).expect("Failed to save");
                 println!("saved to {:?}", nn_file);
