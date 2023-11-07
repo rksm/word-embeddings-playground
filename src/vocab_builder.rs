@@ -178,6 +178,7 @@ fn step2_combine_texts(corpus_file: impl AsRef<Path>) -> Result<()> {
         let f = f?;
         if f.file_type()?.is_file() && f.path().extension() == Some("txt".as_ref()) {
             files.push(f.path());
+            break;
         }
     }
 

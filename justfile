@@ -6,7 +6,10 @@ default:
     just --list
 
 run:
-    cargo run --release
+    # cargo run --release
+    # cargo run --release -- -f data/w2v_skipgram.nn --method skip-gram
+    cargo run --release -- --method skip-gram
+    # cargo run --release -- --method cbow
 
 dev:
     cargo watch -x run

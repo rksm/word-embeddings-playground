@@ -2,7 +2,10 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-cargo run --features cuda --release
+# cargo run --features cuda --release -- -f data/w2v_skipgram.nn --method skipgram
+
+cargo run --features cuda --release -- -f data/w2v_skipgram.nn --method skip-gram
+
 
 # i=0
 # while true; do
