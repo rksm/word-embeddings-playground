@@ -1,9 +1,3 @@
-mod dataset;
-mod vocab_builder;
-mod word2vec;
-
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
 #[macro_use]
 extern crate log;
 
@@ -11,7 +5,9 @@ use candle_core::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
-use crate::dataset::DatasetOptions;
+use word_embeddings_playground::dataset::DatasetOptions;
+use word_embeddings_playground::vocab_builder;
+use word_embeddings_playground::word2vec;
 
 #[derive(Parser)]
 struct Args {
