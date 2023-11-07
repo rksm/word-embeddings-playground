@@ -34,10 +34,11 @@ fn run() -> Result<()> {
 
     println!("----------------");
 
-    if false {
+    if true {
+        const EPOCHS: usize = 100;
         let dataset = DatasetOptions::new()
             .batch_size(20)
-            .epochs(100)
+            .epochs(EPOCHS)
             .vocab(vocab)
             .build()
             .expect("Failed to build dataset");
@@ -50,12 +51,13 @@ fn run() -> Result<()> {
         let mut sgd = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
 
         for (i, epoch) in dataset.epochs.into_iter().enumerate() {
-            println!("epoch {i}");
+            print!("epoch {i}/{EPOCHS} ");
 
-            let n_batches = epoch.batches.len();
             let mut avg_loss = 0.0;
+            let mut n_batches = 0;
 
-            for batch in epoch.batches.into_iter() {
+            for batch in epoch {
+                n_batches += 1;
                 let x = batch.x;
                 let y = batch.y;
                 // dbg!(x.shape());
