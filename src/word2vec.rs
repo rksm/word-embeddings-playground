@@ -2,8 +2,18 @@ use candle_core::{DType, Device, Module, Result, Tensor};
 use candle_nn::VarBuilder;
 use lazy_static::lazy_static;
 
+#[cfg(feature = "cuda")]
 lazy_static! {
-    static ref DEVICE: Device = Device::Cpu;
+    pub static ref DEVICE: Device =
+        Device::Cuda(candle_core::backend::BackendDevice::new(0).unwrap());
+}
+
+#[cfg(not(feature = "cuda"))]
+lazy_static! {
+    pub static ref DEVICE: Device = Device::Cpu;
+}
+
+lazy_static! {
     static ref ZEROES: Tensor = Tensor::zeros((1,), DType::F32, &DEVICE).unwrap();
 }
 
@@ -24,10 +34,9 @@ pub fn convert_one_hot_to_tensor(
 ) -> candle_core::Result<candle_core::Tensor> {
     let numbers = one_hot
         .iter()
-        .map(|&i| one_hot_to_vec(i, n))
-        .flatten()
+        .flat_map(|&i| one_hot_to_vec(i, n))
         .collect::<Vec<_>>();
-    Tensor::from_vec(numbers, (one_hot.len(), n), &Device::Cpu)
+    Tensor::from_vec(numbers, (one_hot.len(), n), &DEVICE)
 }
 
 pub fn one_hot_to_vec(one_hot: u32, n: usize) -> Vec<f32> {

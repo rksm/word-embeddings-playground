@@ -14,18 +14,54 @@ struct Segment {
     text: String,
 }
 
-pub fn doppelgaenger() -> Result<()> {
-    // step1_transcripts_to_text()?;
-    // let text_file = step2_combine_texts()?;
-    // let vocab = step3_build_vocab(text_file)?;
-    let vocab = "./data/vocab-doppelgaenger.txt";
-    step4_build_text_with_only_vocab(vocab)?;
-    Ok(())
+const DATA_DIR: &str = "./data/doppelgaenger";
+
+/// Contains the raw text from the transcripts
+const CORPUS_FILE: &str = "./data/doppelgaenger.txt";
+
+/// Contains the processed words, duplicates removed, stop words removed,
+/// lowercased, etc. One word per line.
+// const VOCAB_FILE: &str = "./data/vocab-doppelgaenger.txt";
+const VOCAB_FILE: &str = "./data/tiny-vocab-doppelgaenger.txt";
+
+const STOPWORDS_FILE: &str = "./data/stopwords-de.txt";
+
+/// Contains the texts but only with words from the vocab. One word per line in
+/// the order of the texts in the transcripts. Used for training.
+const CONTEXT_FILE: &str = "./data/doppelgaenger-only-vocab.txt";
+
+#[derive(Default)]
+pub struct Vocab {
+    pub words: Vec<String>,
+    pub one_hot_encoded: Vec<u32>,
+}
+
+impl Vocab {
+    pub fn build_from_scratch() -> Result<Self> {
+        step1_transcripts_to_text()?;
+        step2_combine_texts(CORPUS_FILE)?;
+        step3_build_vocab(CORPUS_FILE, VOCAB_FILE)?;
+        step4_build_text_with_only_vocab(VOCAB_FILE)?;
+
+        Self::from_files()
+    }
+
+    pub fn from_files() -> Result<Self> {
+        let (words, one_hot_encoded) = vocab_one_hot_encoded(VOCAB_FILE)?;
+        Ok(Self {
+            words,
+            one_hot_encoded,
+        })
+    }
+
+    pub fn n(&self) -> usize {
+        self.words.len()
+    }
 }
 
 fn step1_transcripts_to_text() -> Result<()> {
     let mut files = Vec::new();
-    for f in std::fs::read_dir("./data/doppelgaenger")? {
+    for f in std::fs::read_dir(DATA_DIR)? {
         let f = f?;
         if f.file_type()?.is_file() && f.path().extension() == Some("json".as_ref()) {
             files.push(f.path());
@@ -55,35 +91,34 @@ fn text_from_transcript_file(transcript_file: impl AsRef<Path>) -> Result<String
     Ok(text)
 }
 
-fn step2_combine_texts() -> Result<PathBuf> {
+fn step2_combine_texts(corpus_file: impl AsRef<Path>) -> Result<()> {
     let mut files = Vec::new();
-    for f in std::fs::read_dir("./data/doppelgaenger")? {
+    for f in std::fs::read_dir(DATA_DIR)? {
         let f = f?;
         if f.file_type()?.is_file() && f.path().extension() == Some("txt".as_ref()) {
             files.push(f.path());
         }
     }
 
-    let corpus_file = "./data/doppelgaenger.txt";
-    let mut corpus = std::fs::File::create(corpus_file)?;
+    let mut corpus = std::fs::File::create(corpus_file.as_ref())?;
     for f in tqdm!(files.iter()) {
         use std::io::Write;
         let text = std::fs::read_to_string(f)?;
         writeln!(corpus, "{}", text)?;
     }
 
-    Ok(corpus_file.into())
+    Ok(())
 }
 
 lazy_static::lazy_static! {
     static ref WORDS_RE: regex::Regex = regex::Regex::new(r"([a-zA-ZäöüÄÖÜß]+)").unwrap();
 }
 
-fn step3_build_vocab(corpus_file: impl AsRef<Path>) -> Result<PathBuf> {
+fn step3_build_vocab(corpus_file: impl AsRef<Path>, vocab_file: impl AsRef<Path>) -> Result<()> {
     // let corpus_file = std::path::PathBuf::from("./data/doppelgaenger.txt");
     let corpus = std::fs::read_to_string(corpus_file)?;
 
-    let stop_words = std::fs::read_to_string("./data/stopwords-de.txt")?;
+    let stop_words = std::fs::read_to_string(STOPWORDS_FILE)?;
 
     let mut vocab = std::collections::HashSet::new();
     for word in tqdm!(WORDS_RE.find_iter(&corpus)) {
@@ -94,14 +129,13 @@ fn step3_build_vocab(corpus_file: impl AsRef<Path>) -> Result<PathBuf> {
         vocab.insert(word);
     }
 
-    let vocab_path = "./data/vocab-doppelgaenger.txt";
-    let mut vocab_file = std::fs::File::create(vocab_path)?;
+    let mut vocab_file = std::fs::File::create(vocab_file)?;
     for word in vocab {
         use std::io::Write;
         writeln!(vocab_file, "{}", word)?;
     }
 
-    Ok(vocab_path.into())
+    Ok(())
 }
 
 fn step4_build_text_with_only_vocab(vocab_file: impl AsRef<Path>) -> Result<()> {
@@ -111,15 +145,14 @@ fn step4_build_text_with_only_vocab(vocab_file: impl AsRef<Path>) -> Result<()> 
         .collect::<std::collections::HashSet<_>>();
 
     let mut files = Vec::new();
-    for f in std::fs::read_dir("./data/doppelgaenger")? {
+    for f in std::fs::read_dir(DATA_DIR)? {
         let f = f?;
         if f.file_type()?.is_file() && f.path().extension() == Some("txt".as_ref()) {
             files.push(f.path());
         }
     }
 
-    let only_vocab_texts_file = "./data/doppelgaenger-only-vocab.txt";
-    let mut output_file = std::fs::File::create(only_vocab_texts_file)?;
+    let mut output_file = std::fs::File::create(CONTEXT_FILE)?;
     let mut last_word = String::new();
     for f in tqdm!(files.iter()) {
         use std::io::Write;
@@ -137,17 +170,21 @@ fn step4_build_text_with_only_vocab(vocab_file: impl AsRef<Path>) -> Result<()> 
     Ok(())
 }
 
-pub fn vocab_one_hot_encoded(vocab_file: impl AsRef<Path>) -> Result<(usize, Vec<u32>)> {
+fn vocab_one_hot_encoded(vocab_file: impl AsRef<Path>) -> Result<(Vec<String>, Vec<u32>)> {
     info!("vocab_one_hot_encoded()");
 
     let text = std::fs::read_to_string(vocab_file)?;
-    let words = text.split_whitespace().collect::<Vec<_>>();
+    let words = text
+        .split_whitespace()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
     let n = words.len();
     let mut one_hot = vec![0; n];
 
-    for (i, _word) in tqdm!(words.iter().enumerate()) {
+    for i in tqdm!(0..n) {
         one_hot[i] = 1 << i;
     }
 
-    Ok((n, one_hot))
+    Ok((words, one_hot))
 }
