@@ -23,15 +23,15 @@ const CORPUS_FILE: &str = "./data/doppelgaenger.txt";
 
 /// Contains the processed words, duplicates removed, stop words removed,
 /// lowercased, etc. One word per line.
-// const VOCAB_FILE: &str = "./data/vocab-doppelgaenger.txt";
-const VOCAB_FILE: &str = "./data/tiny-vocab-doppelgaenger.txt";
+const VOCAB_FILE: &str = "./data/vocab-doppelgaenger.txt";
+// const VOCAB_FILE: &str = "./data/tiny-vocab-doppelgaenger.txt";
 
 const STOPWORDS_FILE: &str = "./data/stopwords-de.txt";
 
 /// Contains the texts but only with words from the vocab. One word per line in
 /// the order of the texts in the transcripts. Used for training.
-// const CONTEXT_FILE: &str = "./data/context.txt";
-const CONTEXT_FILE: &str = "./data/context-tiny.txt";
+const CONTEXT_FILE: &str = "./data/context.txt";
+// const CONTEXT_FILE: &str = "./data/context-tiny.txt";
 
 #[derive(Default)]
 pub struct Vocab {
@@ -92,10 +92,10 @@ impl Vocab {
 
     /// Looks up the word at `index` in the context text. Returns the indices of the
     /// 2 words before and after. Also returns the index of the word itself.
-    pub fn context(&self, index: usize) -> ([usize; 4], usize) {
+    pub fn context(&self, index: usize) -> ([u32; 4], u32) {
         let n = self.context_n();
         let mut context = [0; 4];
-        let lookup = |index: usize| -> usize { self.context_word_indices[index] };
+        let lookup = |index: usize| -> u32 { self.context_word_indices[index] as u32 };
 
         match index {
             0 => {
@@ -130,11 +130,19 @@ impl Vocab {
     pub fn word_lookup(&self, idx: usize) -> &str {
         &self.words[idx]
     }
+
+    pub fn encode(&self, word: &str) -> Option<u32> {
+        self.words_by_index.get(word).copied().map(|i| i as u32)
+    }
+
+    pub fn context_to_word_index(&self, idx: u32) -> u32 {
+        self.context_word_indices[idx as usize] as _
+    }
 }
 
 fn step1_transcripts_to_text() -> Result<()> {
     let mut files = Vec::new();
-    for f in std::fs::read_dir(DATA_DIR)?.take(1) {
+    for f in std::fs::read_dir(DATA_DIR)? {
         let f = f?;
         if f.file_type()?.is_file() && f.path().extension() == Some("json".as_ref()) {
             files.push(f.path());

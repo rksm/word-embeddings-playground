@@ -1,4 +1,9 @@
-use candle_core::{DType, Device, Module, Result, Tensor};
+use std::collections::HashMap;
+
+use candle_core::{
+    safetensors::{load, save},
+    DType, Device, Module, Result, Tensor,
+};
 use candle_nn::VarBuilder;
 use lazy_static::lazy_static;
 
@@ -62,12 +67,45 @@ impl Word2VecNN {
     }
 
     pub fn forward(&self, input: &Tensor) -> Result<Tensor> {
-        // dbg!(&self.projection_layer.weight().to_vec2::<f32>()?);
-        // dbg!(&self.projection_layer.bias());
-
         let xs = self.projection_layer.forward(input)?;
-        // let xs = xs.relu()?;
+        let xs = xs.mean(1)?;
         let xs = self.output_layer.forward(&xs)?;
         Ok(xs)
+    }
+
+    pub fn load(file: impl AsRef<std::path::Path>, embedding_size: usize) -> anyhow::Result<Self> {
+        let file = file.as_ref();
+        let map = load(file, &DEVICE)?;
+
+        let embeddings = map.get("embeddings").unwrap();
+        let projection_layer = candle_nn::Embedding::new(embeddings.clone(), embedding_size);
+        let output = map.get("output").unwrap();
+        let bias = map.get("bias").unwrap();
+        let output_layer = candle_nn::Linear::new(output.clone(), Some(bias.clone()));
+
+        Ok(Self {
+            projection_layer,
+            output_layer,
+        })
+    }
+
+    pub fn save(&self, file: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
+        let file = file.as_ref();
+        // let embeddings_file = dir.join("embeddings.bin");
+        // let output_file = dir.join("output.bin");
+
+        let embeddings = self.projection_layer.embeddings();
+        let output = self.output_layer.weight();
+        let bias = self.output_layer.bias().unwrap();
+
+        let map = HashMap::from_iter([
+            ("embeddings", embeddings.clone()),
+            ("output", output.clone()),
+            ("bias", bias.clone()),
+        ]);
+
+        save(&map, file)?;
+
+        Ok(())
     }
 }

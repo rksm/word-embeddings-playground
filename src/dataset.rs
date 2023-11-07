@@ -3,21 +3,20 @@ use std::collections::HashSet;
 
 use crate::{vocab_builder::Vocab, word2vec};
 
-#[derive(Default)]
-pub struct DatasetOptions {
+pub struct DatasetOptions<'a> {
     pub batch_size: usize,
     pub batches_per_epoch: Option<usize>,
     pub epochs: usize,
-    pub vocab: Vocab,
+    pub vocab: &'a Vocab,
 }
 
-impl DatasetOptions {
-    pub fn new() -> Self {
+impl<'a> DatasetOptions<'a> {
+    pub fn new(vocab: &'a Vocab) -> Self {
         Self {
             batch_size: 20,
             batches_per_epoch: None,
             epochs: 5,
-            vocab: Vocab::default(),
+            vocab,
         }
     }
 
@@ -32,17 +31,19 @@ impl DatasetOptions {
         self
     }
 
+    /// If called will set `batches_per_epoch` so that the entire context is
+    /// trained on in one epoch.
+    #[allow(dead_code)]
+    pub fn entire_context_in_one_epoch(mut self) {
+        self.batches_per_epoch = Some(self.vocab.context_n() / self.batch_size);
+    }
+
     pub fn epochs(mut self, epochs: usize) -> Self {
         self.epochs = epochs;
         self
     }
 
-    pub fn vocab(mut self, vocab: Vocab) -> Self {
-        self.vocab = vocab;
-        self
-    }
-
-    pub fn build(self) -> Result<Dataset> {
+    pub fn build(self) -> Result<Dataset<'a>> {
         let Self {
             batch_size,
             batches_per_epoch,
@@ -51,39 +52,46 @@ impl DatasetOptions {
         } = self;
         let mut epochs = Vec::new();
 
-        let batches_per_epoch = batches_per_epoch.unwrap_or_else(|| vocab.context_n() / batch_size);
-        dbg!(batches_per_epoch);
-
         for _ in 0..epoch_count {
-            epochs.push(Epoch::random(batches_per_epoch, batch_size, &vocab)?);
+            epochs.push(Epoch::random(batches_per_epoch, batch_size, vocab)?);
         }
 
         Ok(Dataset {
             n: vocab.n(),
-            vocab: vocab.words,
             epochs,
         })
     }
 }
 
-pub struct Dataset {
+pub struct Dataset<'a> {
     pub n: usize,
-    pub vocab: Vec<String>,
-    pub epochs: Vec<Epoch>,
+    pub epochs: Vec<Epoch<'a>>,
 }
 
-pub struct Epoch {
-    // pub batches: Vec<Batch>,
+pub struct Epoch<'a> {
+    pub remaining_batch_count: Option<usize>,
     pub batch_size: usize,
     pub remaining_context_indexes: HashSet<u32>,
+    pub vocab: &'a Vocab,
 }
 
-impl Iterator for Epoch {
+impl<'a> Iterator for Epoch<'a> {
     type Item = Batch;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let b = Batch::random(self.batch_size, &mut self.remaining_context_indexes)
-            .expect("Failed to create batch");
+        if let Some(remaining_batch_count) = &mut self.remaining_batch_count {
+            if *remaining_batch_count == 0 {
+                return None;
+            }
+            *remaining_batch_count -= 1;
+        }
+
+        let b = Batch::random(
+            self.batch_size,
+            &mut self.remaining_context_indexes,
+            self.vocab,
+        )
+        .expect("Failed to create batch");
 
         if b.is_empty() {
             None
@@ -93,27 +101,15 @@ impl Iterator for Epoch {
     }
 }
 
-impl Epoch {
-    pub fn random(n_batches: usize, batch_size: usize, vocab: &Vocab) -> Result<Self> {
-        // let mut remaining = (0u32..vocab.context_n() as u32).collect::<HashSet<_>>();
-        let mut remaining = (0u32..vocab.n() as u32).collect::<HashSet<_>>();
-
+impl<'a> Epoch<'a> {
+    pub fn random(n_batches: Option<usize>, batch_size: usize, vocab: &'a Vocab) -> Result<Self> {
+        let remaining = (0u32..vocab.context_n() as u32).collect::<HashSet<_>>();
         Ok(Self {
+            remaining_batch_count: n_batches,
             batch_size,
             remaining_context_indexes: remaining,
+            vocab,
         })
-
-        // let mut batches = Vec::new();
-
-        // for _ in 0..n_batches {
-        //     let b = Batch::random(batch_size, &mut remaining, vocab)?;
-        //     if b.is_empty() {
-        //         break;
-        //     }
-        //     batches.push(b);
-        // }
-
-        // Ok(Self { batches })
     }
 }
 
@@ -123,7 +119,11 @@ pub struct Batch {
 }
 
 impl Batch {
-    pub fn random(batch_size: usize, remaining_context_indexes: &mut HashSet<u32>) -> Result<Self> {
+    pub fn random(
+        batch_size: usize,
+        remaining_context_indexes: &mut HashSet<u32>,
+        vocab: &Vocab,
+    ) -> Result<Self> {
         let word_indexes = remaining_context_indexes
             .iter()
             .take(batch_size)
@@ -132,13 +132,29 @@ impl Batch {
         remaining_context_indexes.retain(|i| !word_indexes.contains(i));
 
         let word_indexes = word_indexes.into_iter().collect::<Vec<_>>();
-        Self::new(&word_indexes)
+        Self::new(&word_indexes, vocab)
     }
 
-    pub fn new(word_indexes: &[u32]) -> Result<Self> {
+    pub fn new(word_indexes: &[u32], vocab: &Vocab) -> Result<Self> {
+        let mut x = Vec::new();
+        let mut y = Vec::new();
+
+        for w in word_indexes {
+            let (context, target) = vocab.context(*w as usize);
+            x.extend(
+                context
+                    .into_iter()
+                    .map(|i| vocab.context_to_word_index(i))
+                    .collect::<Vec<_>>(),
+            );
+            y.push(vocab.context_to_word_index(target));
+        }
+
         let batch_size = word_indexes.len();
-        let y = Tensor::from_vec(word_indexes.to_vec(), (batch_size,), &word2vec::DEVICE)?;
-        let x = Tensor::from_vec(word_indexes.to_vec(), (batch_size,), &word2vec::DEVICE)?;
+
+        let x = Tensor::from_vec(x, (batch_size, 4), &word2vec::DEVICE)?;
+        let y = Tensor::from_vec(y, (batch_size,), &word2vec::DEVICE)?;
+
         Ok(Self { y, x })
     }
 
