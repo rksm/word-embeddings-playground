@@ -1,0 +1,5 @@
+* building the vocabulary
+
+#+begin_src shell
+rsync -az -f'+ *.mp3.json' -f'- *' podwriter-1:/mnt/podwriter_data/doppelgaenger/ data/doppelgaenger/
+#+end_src

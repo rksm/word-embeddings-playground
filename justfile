@@ -17,6 +17,6 @@ docker-build:
     docker build -t {{DOCKER_IMAGE}} .
 
 docker-run:
-    docker run --rm -v $PWD/docker-target:/app/target --gpus all -it {{DOCKER_IMAGE}} bash
+    docker run --rm -v $PWD/docker-target:/app/target --gpus all -it {{DOCKER_IMAGE}}
     # docker run --rm --gpus all -it {{DOCKER_IMAGE}} bash
     # docker run --rm -it {{DOCKER_IMAGE}} bash
