@@ -34,8 +34,9 @@ impl<'a> DatasetOptions<'a> {
     /// If called will set `batches_per_epoch` so that the entire context is
     /// trained on in one epoch.
     #[allow(dead_code)]
-    pub fn entire_context_in_one_epoch(mut self) {
+    pub fn entire_context_in_one_epoch(mut self) -> Self {
         self.batches_per_epoch = Some(self.vocab.context_n() / self.batch_size);
+        self
     }
 
     pub fn epochs(mut self, epochs: usize) -> Self {

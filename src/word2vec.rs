@@ -1,11 +1,16 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, path::Path};
 
 use candle_core::{
     safetensors::{load, save},
     DType, Device, Module, Result, Tensor,
 };
-use candle_nn::VarBuilder;
+use candle_nn::{loss, Optimizer, VarBuilder, VarMap};
 use lazy_static::lazy_static;
+
+use crate::{
+    dataset::{Batch, Dataset},
+    vocab_builder::Vocab,
+};
 
 #[cfg(feature = "cuda")]
 lazy_static! {
@@ -131,8 +136,9 @@ impl Word2VecNN {
                 })
                 .collect::<Vec<_>>();
             prev_files.sort_by_key(|(n, _)| *n);
+            prev_files.reverse();
             for (n, f) in prev_files {
-                if n > 10 {
+                if n >= 9 {
                     std::fs::remove_file(f)?;
                     continue;
                 }
@@ -142,7 +148,7 @@ impl Word2VecNN {
         }
 
         if file.exists() {
-            std::fs::rename(file, file.with_extension("1"))?;
+            std::fs::rename(file, file.with_extension("nn.1"))?;
         }
 
         // let embeddings_file = dir.join("embeddings.bin");
@@ -161,5 +167,164 @@ impl Word2VecNN {
         save(&map, file)?;
 
         Ok(())
+    }
+}
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+pub const EPOCHS: usize = 100;
+pub const EMBEDDING_SIZE: usize = 100;
+const LEARNING_RATE: f64 = 0.05;
+
+pub struct Training {
+    pub nn: Word2VecNN,
+    pub optim: candle_nn::SGD,
+    adjust_learning_rate: bool,
+    epoch: usize,
+    batch: usize,
+    last_loss: Option<f32>,
+    avg_loss: f32,
+    save: bool,
+}
+
+impl Training {
+    pub fn load(nn_file: impl AsRef<Path>) -> Result<Self> {
+        let nn = Word2VecNN::load(nn_file, EMBEDDING_SIZE).expect("Failed to load");
+        let varmap = VarMap::new();
+        let optim = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
+
+        Ok(Self {
+            nn,
+            optim,
+            adjust_learning_rate: false,
+            save: false,
+            epoch: 0,
+            batch: 0,
+            avg_loss: 0.0,
+            last_loss: None,
+        })
+    }
+
+    pub fn new(vocab_size: usize) -> Result<Self> {
+        let varmap = VarMap::new();
+        let vs = VarBuilder::from_varmap(&varmap, DType::F32, &DEVICE);
+        let nn = Word2VecNN::new(vocab_size, EMBEDDING_SIZE, vs.clone())?;
+        let optim = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
+        // let mut optim = candle_nn::AdamW::new(
+        //     varmap.all_vars(),
+        //     candle_nn::ParamsAdamW {
+        //         lr: LEARNING_RATE,
+        //         ..Default::default()
+        //     },
+        // )?;
+
+        Ok(Self {
+            nn,
+            optim,
+            adjust_learning_rate: false,
+            save: false,
+            epoch: 0,
+            batch: 0,
+            avg_loss: 0.0,
+            last_loss: None,
+        })
+    }
+
+    pub fn adjust_learning_rate(&mut self, adjust_learning_rate: bool) {
+        self.adjust_learning_rate = adjust_learning_rate;
+    }
+
+    pub fn save(&mut self, save: bool) {
+        self.save = save;
+    }
+
+    pub fn run(&mut self, dataset: Dataset) -> Result<()> {
+        for (i, epoch) in dataset.epochs.into_iter().enumerate() {
+            print!("epoch {i}/{EPOCHS} ");
+
+            let mut avg_loss = 0.0;
+            let mut n_batches = 0;
+
+            for Batch { x, y } in epoch {
+                n_batches += 1;
+                let logits = self.nn.forward(&x).expect("Failed to forward");
+                let loss = loss::cross_entropy(&logits, &y).expect("Failed to compute loss");
+                let loss_scalar = loss
+                    .mean_all()?
+                    .to_scalar::<f32>()
+                    .expect("Failed to to_scalar");
+                self.optim
+                    .backward_step(&loss)
+                    .expect("Failed to backward_step");
+
+                avg_loss += loss_scalar;
+                self.avg_loss = avg_loss / n_batches as f32;
+
+                self.batch_step(loss_scalar);
+            }
+
+            self.epoch_step();
+        }
+
+        Ok(())
+    }
+
+    fn epoch_step(&mut self) {
+        self.avg_loss = 0.0;
+        self.epoch += 1;
+        self.batch = 0;
+        if self.save {
+            self.nn.save("nn.bin").expect("Failed to save");
+        }
+    }
+
+    fn batch_step(&mut self, loss: f32) {
+        self.batch += 1;
+
+        let Self {
+            nn,
+            optim,
+            adjust_learning_rate,
+            epoch,
+            batch,
+            avg_loss,
+            last_loss,
+            save,
+        } = self;
+
+        if *adjust_learning_rate {
+            if let Some(last_loss) = last_loss {
+                let delta = *last_loss - loss;
+                match f32::abs(delta) {
+                    delta if delta > 0.75 => {
+                        let lr = optim.learning_rate();
+                        let new_lr = lr * 0.75;
+                        warn!("adjusting learning rate from {} to {}", lr, new_lr);
+                        optim.set_learning_rate(new_lr);
+                    }
+                    delta if delta < 0.01 => {
+                        let lr = optim.learning_rate();
+                        let new_lr = lr * 1.1;
+                        warn!("adjusting learning rate from {} to {}", lr, new_lr);
+                        optim.set_learning_rate(new_lr);
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        *last_loss = Some(loss);
+
+        if *batch % 250 == 0 {
+            println!(
+                "epoch={epoch} batch={batch} loss={loss} avg_loss={} lr={}",
+                avg_loss,
+                optim.learning_rate(),
+            );
+
+            if *save {
+                nn.save("nn.bin").expect("Failed to save");
+            }
+        }
     }
 }
