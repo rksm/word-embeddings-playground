@@ -72,6 +72,7 @@ mod candle {
         (a * b)?.sum(0)
     }
 
+    #[allow(dead_code)]
     pub fn cosine_similarity(a: &Tensor, b: &Tensor) -> Result<Tensor> {
         dot_product(a, b)? / (dot_product(a, a)? * &dot_product(b, b)?)?.sqrt()?
     }

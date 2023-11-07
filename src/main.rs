@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use candle_core::{DType, Device, Result, Tensor, D};
+use candle_core::{DType, Result, Tensor, D};
 use candle_nn::{loss, ops, Optimizer, VarBuilder, VarMap};
 
 #[macro_use]
@@ -33,7 +33,7 @@ fn run() -> Result<()> {
         dbg!(context);
         dbg!(target);
         for ea in context {
-            dbg!((vocab.word_lookup(ea as _)));
+            dbg!(vocab.word_lookup(ea as _));
         }
         dbg!(vocab.word_lookup(target as _));
     }
@@ -146,6 +146,7 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn run2() {
     word2vec::foo().expect("Failed to foo");
 }

@@ -1,7 +1,4 @@
-use rust_tokenizers::{
-    tokenizer::{BertTokenizer, MultiThreadedTokenizer, TruncationStrategy},
-    TokenizedInput,
-};
+use rust_tokenizers::tokenizer::{BertTokenizer, MultiThreadedTokenizer, TruncationStrategy};
 
 fn main() {
     a();
@@ -25,7 +22,7 @@ fn a() {
 
 fn b() {
     use rust_tokenizers::adapters::Example;
-    use rust_tokenizers::tokenizer::{BertTokenizer, Tokenizer, TruncationStrategy};
+    use rust_tokenizers::tokenizer::Tokenizer;
     use rust_tokenizers::vocab::{BertVocab, Vocab};
 
     let vocab_path = concat!(env!("CARGO_MANIFEST_DIR"), "/data/vocab.txt");

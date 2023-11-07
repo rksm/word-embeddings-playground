@@ -40,6 +40,7 @@ fn dot_product(a: &[f64], b: &[f64]) -> f64 {
     sum
 }
 
+#[allow(dead_code)]
 fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
     dot_product(a, b) / (dot_product(a, a) * dot_product(b, b)).sqrt()
 }
