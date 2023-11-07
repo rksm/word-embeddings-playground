@@ -26,6 +26,7 @@ fn run() {
     let vs = VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
     const EMBEDDING_SIZE: usize = 100;
     const LEARNING_RATE: f64 = 0.01;
+    // const EPOCHS: usize = 5;
     const EPOCHS: usize = 5000;
     let nn = word2vec::Word2VecNN::new(n, EMBEDDING_SIZE, vs.clone()).expect("Failed to create NN");
     let mut sgd =
@@ -35,20 +36,33 @@ fn run() {
     let mut xs = Vec::new();
 
     for _ in 0..EPOCHS {
-        let index = rand::thread_rng().gen_range(0..n);
-        let y =
-            Tensor::from_vec(vec![index as u32], 1, &Device::Cpu).expect("Failed to create tensor");
+        let sample =
+            rand::thread_rng().sample_iter(rand::distributions::Uniform::new(0u32, n as u32));
+        let size_per_epoch = 20;
+        let indexes = sample.take(size_per_epoch).collect::<Vec<_>>();
+
+        let y = Tensor::from_vec(indexes.clone(), (size_per_epoch,), &Device::Cpu)
+            .expect("Failed to create tensor");
         // println!("INDEX={index} INPUT={input} INPUT={input:#0n$b}", input = one_hot_encoded[index]);
-        let x = word2vec::convert_one_hot_to_tensor(one_hot_encoded[index], n)
-            .expect("Failed to convert one-hot to tensor");
+
+        let x = word2vec::convert_one_hot_to_tensor(
+            indexes
+                .iter()
+                .map(|&i| one_hot_encoded[i as usize])
+                .collect::<Vec<_>>(),
+            n,
+        )
+        .expect("Failed to convert one-hot to tensor");
         xs.push(x);
         ys.push(y);
     }
 
     for (x, y) in xs.iter().zip(ys.iter()) {
+        // dbg!(x.shape());
         let logits = nn.forward(x).expect("Failed to forward");
         // dbg!(logits.to_vec2::<f32>().expect("Failed to convert to vec2"));
         let log_sm = ops::log_softmax(&logits, D::Minus1).expect("Failed to log softmax");
+        // dbg!(y.to_vec1::<u32>().expect("Failed to convert to vec2"));
         let loss = loss::nll(&log_sm, y).expect("Failed to compute loss");
         let loss_scalar = loss.mean_all().unwrap().to_scalar::<f32>().unwrap();
         println!("loss: {loss_scalar}");
@@ -56,7 +70,7 @@ fn run() {
     }
 
     for index in (0..3).map(|_| rand::thread_rng().gen_range(0..n)) {
-        let x = word2vec::convert_one_hot_to_tensor(one_hot_encoded[index], n)
+        let x = word2vec::convert_one_hot_to_tensor(vec![one_hot_encoded[index]], n)
             .expect("Failed to convert one-hot to tensor");
         let logits = nn.forward(&x).expect("Failed to forward");
         let result =

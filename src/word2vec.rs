@@ -19,19 +19,21 @@ pub fn foo() -> Result<()> {
 }
 
 pub fn convert_one_hot_to_tensor(
-    one_hot: u32,
+    one_hot: Vec<u32>,
     n: usize,
 ) -> candle_core::Result<candle_core::Tensor> {
-    let mut numbers = vec![0f32; n];
+    let numbers = one_hot
+        .iter()
+        .map(|&i| one_hot_to_vec(i, n))
+        .flatten()
+        .collect::<Vec<_>>();
+    Tensor::from_vec(numbers, (one_hot.len(), n), &Device::Cpu)
+}
 
-    (0..n).for_each(|i| {
-        if one_hot & (1 << i) != 0 {
-            numbers[i] = 1.0;
-        }
-    });
-
-    // Tensor::from_vec(numbers, n, &Device::Cpu)
-    Tensor::from_iter(numbers, &Device::Cpu)?.unsqueeze(0)
+pub fn one_hot_to_vec(one_hot: u32, n: usize) -> Vec<f32> {
+    (0..n)
+        .map(move |i| if one_hot & (1 << i) != 0 { 1.0 } else { 0.0 })
+        .collect()
 }
 
 /// Convert a one-hot encoded tensor to a number
