@@ -29,3 +29,12 @@ docker-run:
     # docker run --rm -it {{DOCKER_IMAGE}} bash
 
 docker: docker-build docker-run
+
+conda:
+    conda activate word-embeddings
+
+jupyter:
+    jupyter notebook --no-browser
+
+    # jupyter notebook --no-browser --port-retries=0 --port=8888 --ip=0.0.0.0 \
+    #   --NotebookApp.token='' --NotebookApp.password='' --NotebookApp.allow_origin='*' --NotebookApp.disable_check_xsrf=True
