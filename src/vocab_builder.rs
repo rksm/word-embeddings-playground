@@ -17,22 +17,22 @@ struct Segment {
     text: String,
 }
 
-const DATA_DIR: &str = "./data/doppelgaenger";
+const DATA_DIR: &str = "./data/doppelgaenger/raw/";
 
 /// Contains the raw text from the transcripts
-const CORPUS_FILE: &str = "./data/doppelgaenger.txt";
+const CORPUS_FILE: &str = "./data/doppelgaenger/doppelgaenger.txt";
 
 /// Contains the processed words, duplicates removed, stop words removed,
 /// lowercased, etc. One word per line.
-const VOCAB_FILE: &str = "./data/vocab-doppelgaenger.txt";
-// const VOCAB_FILE: &str = "./data/tiny-vocab-doppelgaenger.txt";
+const VOCAB_FILE: &str = "./data/doppelgaenger/vocab-doppelgaenger.txt";
+// const VOCAB_FILE: &str = "./data/doppelgaenger/tiny-vocab-doppelgaenger.txt";
 
 const STOPWORDS_FILE: &str = "./data/stopwords-de.txt";
 
 /// Contains the texts but only with words from the vocab. One word per line in
 /// the order of the texts in the transcripts. Used for training.
-const CONTEXT_FILE: &str = "./data/context.txt";
-// const CONTEXT_FILE: &str = "./data/context-tiny.txt";
+const CONTEXT_FILE: &str = "./data/doppelgaenger/context.txt";
+// const CONTEXT_FILE: &str = "./data/doppelgaenger/context-tiny.txt";
 
 pub struct Vocab {
     pub words: Vec<String>,
@@ -217,7 +217,7 @@ lazy_static::lazy_static! {
 }
 
 fn step3_build_vocab(corpus_file: impl AsRef<Path>, vocab_file: impl AsRef<Path>) -> Result<()> {
-    // let corpus_file = std::path::PathBuf::from("./data/doppelgaenger.txt");
+    // let corpus_file = std::path::PathBuf::from("./data/doppelgaenger/doppelgaenger.txt");
     let corpus = std::fs::read_to_string(corpus_file)?;
 
     let stop_words = std::fs::read_to_string(STOPWORDS_FILE)?;

@@ -11,7 +11,7 @@ fn a() {
         vec!["I couldn't believe that I could actually understand what I was reading."];
 
     // Tokens
-    let vocab_file = concat!(env!("CARGO_MANIFEST_DIR"), "/data/vocab.txt");
+    let vocab_file = concat!(env!("CARGO_MANIFEST_DIR"), "/data/doppelgaenger/vocab.txt");
     // let vocab_file = concat!(env!("CARGO_MANIFEST_DIR"), "/data/bert-base-uncased-vocab.txt");
     let tokenizer: BertTokenizer =
         BertTokenizer::from_file(vocab_file, true, true).expect("Error while loading vocab file");
@@ -25,7 +25,7 @@ fn b() {
     use rust_tokenizers::tokenizer::Tokenizer;
     use rust_tokenizers::vocab::{BertVocab, Vocab};
 
-    let vocab_path = concat!(env!("CARGO_MANIFEST_DIR"), "/data/vocab.txt");
+    let vocab_path = concat!(env!("CARGO_MANIFEST_DIR"), "/data/doppelgaenger/vocab.txt");
     let vocab = BertVocab::from_file(vocab_path).expect("Unable to build vocab");
     let lowercase: bool = true;
     let strip_accents: bool = true;

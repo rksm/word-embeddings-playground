@@ -47,7 +47,7 @@ fn run(args: Args) -> Result<()> {
 
     println!("----------------");
 
-    let nn_file = PathBuf::from("data/word2vec.nn");
+    let nn_file = PathBuf::from("data/doppelgaenger/word2vec.nn");
 
     // if false {
     //     let nn = word2vec::Word2VecCbow::load(&nn_file, word2vec::EMBEDDING_SIZE)

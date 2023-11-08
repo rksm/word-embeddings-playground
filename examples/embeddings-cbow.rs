@@ -86,7 +86,7 @@ fn get_embedding_at(embeddings: &Tensor, idx: u32) -> candle_core::Result<Tensor
 }
 
 fn load_embeddings1() -> Tensor {
-    let nn_file = PathBuf::from("data/cbow.nn");
+    let nn_file = PathBuf::from("data/doppelgaenger/cbow.nn");
     let nn =
         word2vec::Word2VecCbow::load(nn_file, word2vec::EMBEDDING_SIZE).expect("Failed to load");
     let embeddings = nn.projection_layer.embeddings();
@@ -94,7 +94,7 @@ fn load_embeddings1() -> Tensor {
 }
 
 fn load_embeddings2() -> Tensor {
-    let nn_file = PathBuf::from("data/w2v_skipgram.nn");
+    let nn_file = PathBuf::from("data/doppelgaenger/w2v_skipgram.nn");
     let nn = word2vec::Word2VecSkipGram::load(nn_file, word2vec::EMBEDDING_SIZE)
         .expect("Failed to load");
     let embeddings = nn.out_embed.embeddings();
@@ -102,7 +102,7 @@ fn load_embeddings2() -> Tensor {
 }
 
 fn load_embeddings3() -> Tensor {
-    let nn_file = PathBuf::from("data/w2v_skipgram.nn");
+    let nn_file = PathBuf::from("data/doppelgaenger/w2v_skipgram.nn");
     let nn = word2vec::Word2VecSkipGram::load(nn_file, word2vec::EMBEDDING_SIZE)
         .expect("Failed to load");
     let embeddings = nn.in_embed.embeddings();

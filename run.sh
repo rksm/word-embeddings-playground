@@ -2,8 +2,8 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-cargo run --features cuda --release -- -f data/cbow.nn --method cbow
-# cargo run --features cuda --release -- -f data/w2v_skipgram.nn --method skip-gram
+cargo run --features cuda --release -- -f data/doppelgaenger/cbow.nn --method cbow
+# cargo run --features cuda --release -- -f data/doppelgaenger/w2v_skipgram.nn --method skip-gram
 
 
 # i=0
