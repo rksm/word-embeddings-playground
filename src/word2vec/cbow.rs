@@ -15,8 +15,8 @@ lazy_static! {
 }
 
 pub struct Word2VecCbow {
-    projection_layer: candle_nn::Embedding,
-    output_layer: candle_nn::Linear,
+    pub projection_layer: candle_nn::Embedding,
+    pub output_layer: candle_nn::Linear,
 }
 
 impl Word2VecNet for Word2VecCbow {

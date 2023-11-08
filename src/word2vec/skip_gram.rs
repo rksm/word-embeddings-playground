@@ -20,9 +20,9 @@ pub fn dot_product(a: &Tensor, b: &Tensor) -> Result<Tensor> {
 }
 
 pub struct Word2VecSkipGram {
-    in_embed: candle_nn::Embedding,
-    out_embed: candle_nn::Embedding,
-    output_layer: candle_nn::Linear,
+    pub in_embed: candle_nn::Embedding,
+    pub out_embed: candle_nn::Embedding,
+    pub output_layer: candle_nn::Linear,
 }
 
 impl Word2VecNet for Word2VecSkipGram {

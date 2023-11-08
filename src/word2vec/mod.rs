@@ -5,6 +5,7 @@ mod skip_gram;
 mod training;
 
 pub use cbow::Word2VecCbow;
+pub use skip_gram::Word2VecSkipGram;
 pub use training::Training;
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

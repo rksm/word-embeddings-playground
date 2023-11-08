@@ -1,5 +1,6 @@
 use anyhow::Result;
 use kdam::tqdm;
+use rust_stemmers::{Algorithm, Stemmer};
 use std::{collections::HashMap, path::Path};
 
 #[allow(dead_code)]
@@ -33,11 +34,22 @@ const STOPWORDS_FILE: &str = "./data/stopwords-de.txt";
 const CONTEXT_FILE: &str = "./data/context.txt";
 // const CONTEXT_FILE: &str = "./data/context-tiny.txt";
 
-#[derive(Default)]
 pub struct Vocab {
     pub words: Vec<String>,
     pub words_by_index: HashMap<String, usize>,
     pub context_word_indices: Vec<usize>,
+    pub stemmer: Stemmer,
+}
+
+impl Default for Vocab {
+    fn default() -> Self {
+        Self {
+            words: Default::default(),
+            words_by_index: Default::default(),
+            context_word_indices: Default::default(),
+            stemmer: Stemmer::create(Algorithm::German),
+        }
+    }
 }
 
 impl Vocab {
@@ -79,6 +91,7 @@ impl Vocab {
             words,
             words_by_index,
             context_word_indices,
+            ..Default::default()
         })
     }
 
@@ -132,7 +145,14 @@ impl Vocab {
     }
 
     pub fn encode(&self, word: &str) -> Option<u32> {
-        self.words_by_index.get(word).copied().map(|i| i as u32)
+        self.words_by_index
+            .get(word)
+            .or_else(|| {
+                let word = self.stemmer.stem(word);
+                self.words_by_index.get(word.as_ref())
+            })
+            .copied()
+            .map(|i| i as u32)
     }
 
     pub fn context_to_word_index(&self, idx: u32) -> u32 {
@@ -202,12 +222,14 @@ fn step3_build_vocab(corpus_file: impl AsRef<Path>, vocab_file: impl AsRef<Path>
 
     let stop_words = std::fs::read_to_string(STOPWORDS_FILE)?;
 
+    let de_stemmer = Stemmer::create(Algorithm::German);
     let mut vocab = std::collections::HashSet::new();
     for word in tqdm!(WORDS_RE.find_iter(&corpus)) {
         let word = word.as_str().to_lowercase();
         if stop_words.contains(&word) {
             continue;
         }
+        let word = de_stemmer.stem(word.as_str()).to_string();
         vocab.insert(word);
     }
 
@@ -234,6 +256,7 @@ fn step4_build_text_with_only_vocab(vocab_file: impl AsRef<Path>) -> Result<()> 
         }
     }
 
+    let de_stemmer = Stemmer::create(Algorithm::German);
     let mut output_file = std::fs::File::create(CONTEXT_FILE)?;
     let mut last_word = String::new();
     for f in tqdm!(files.iter()) {
@@ -242,6 +265,7 @@ fn step4_build_text_with_only_vocab(vocab_file: impl AsRef<Path>) -> Result<()> 
 
         for word in tqdm!(WORDS_RE.find_iter(&text)) {
             let word = word.as_str().to_lowercase();
+            let word = de_stemmer.stem(word.as_str()).to_string();
             if vocab.contains(&word) && word != last_word {
                 writeln!(output_file, "{}", word)?;
                 last_word = word;

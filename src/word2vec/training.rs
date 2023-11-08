@@ -98,7 +98,9 @@ impl Training {
                 n_batches += 1;
 
                 let logits = self.nn.forward(x, y).expect("Failed to forward");
+
                 let y = y.squeeze(1)?;
+
                 let loss = loss::cross_entropy(&logits, &y).expect("Failed to compute loss");
                 // let loss = loss::nll(&logits, &y).expect("Failed to compute loss");
 
