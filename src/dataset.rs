@@ -3,6 +3,8 @@ use std::collections::HashSet;
 
 use crate::{vocab_builder::Vocab, word2vec};
 
+pub const CONTEXT_SIZE: usize = 8;
+
 pub struct DatasetOptions<'a> {
     pub batch_size: usize,
     pub batches_per_epoch: Option<usize>,
@@ -75,7 +77,8 @@ pub struct Dataset<'a> {
 pub struct Epoch<'a> {
     pub remaining_batch_count: Option<usize>,
     pub batch_size: usize,
-    pub remaining_context_indexes: HashSet<u32>,
+    // pub remaining_context_indexes: HashSet<u32>,
+    pub remaining_context_indexes: Vec<u32>,
     pub vocab: &'a Vocab,
     pub method: word2vec::Method,
 }
@@ -100,14 +103,15 @@ impl<'a> Iterator for Epoch<'a> {
                 )
                 .expect("Failed to create batch"),
             ),
-            word2vec::Method::SkipGram => Box::new(
-                SkipgramBatch::random(
-                    self.batch_size,
-                    &mut self.remaining_context_indexes,
-                    self.vocab,
-                )
-                .expect("Failed to create batch"),
-            ),
+            // word2vec::Method::SkipGram => Box::new(
+            //     SkipgramBatch::random(
+            //         self.batch_size,
+            //         &mut self.remaining_context_indexes,
+            //         self.vocab,
+            //     )
+            //     .expect("Failed to create batch"),
+            // ),
+            _ => unimplemented!(),
         };
 
         if batch.is_empty() {
@@ -125,7 +129,8 @@ impl<'a> Epoch<'a> {
         method: word2vec::Method,
         vocab: &'a Vocab,
     ) -> Result<Self> {
-        let remaining = (0u32..vocab.context_n() as u32).collect::<HashSet<_>>();
+        // let remaining = (0u32..vocab.context_n() as u32).collect::<HashSet<_>>();
+        let remaining = (0u32..vocab.context_n() as u32).collect::<Vec<_>>();
         Ok(Self {
             remaining_batch_count: n_batches,
             batch_size,
@@ -167,17 +172,11 @@ impl Batch for CbowBatch {
 impl CbowBatch {
     pub fn random(
         batch_size: usize,
-        remaining_context_indexes: &mut HashSet<u32>,
+        remaining_context_indexes: &mut Vec<u32>,
         vocab: &Vocab,
     ) -> Result<Self> {
-        let word_indexes = remaining_context_indexes
-            .iter()
-            .take(batch_size)
-            .copied()
-            .collect::<HashSet<_>>();
-        remaining_context_indexes.retain(|i| !word_indexes.contains(i));
-
-        let word_indexes = word_indexes.into_iter().collect::<Vec<_>>();
+        let word_indexes =
+            remaining_context_indexes.split_off(remaining_context_indexes.len() - batch_size);
         Self::new(&word_indexes, vocab)
     }
 
@@ -193,13 +192,13 @@ impl CbowBatch {
                     .map(|i| vocab.context_to_word_index(i))
                     .collect::<Vec<_>>(),
             );
-            y.push(vocab.context_to_word_index(target));
+            y.extend(vec![vocab.context_to_word_index(target); CONTEXT_SIZE]);
         }
 
-        let batch_size = word_indexes.len();
+        let batch_size = word_indexes.len() * CONTEXT_SIZE;
 
-        let x = Tensor::from_vec(x, (batch_size, 4), &word2vec::DEVICE)?;
-        let y = Tensor::from_vec(y, (batch_size,), &word2vec::DEVICE)?;
+        let x = Tensor::from_vec(x, (batch_size, 1), &word2vec::DEVICE)?;
+        let y = Tensor::from_vec(y, (batch_size, 1), &word2vec::DEVICE)?;
 
         Ok(Self { y, x })
     }
@@ -249,9 +248,9 @@ impl SkipgramBatch {
                     .map(|i| vocab.context_to_word_index(i))
                     .collect::<Vec<_>>(),
             );
-            x.extend(vec![vocab.context_to_word_index(target); 4]);
+            x.extend(vec![vocab.context_to_word_index(target); CONTEXT_SIZE]);
         }
-        let batch_size = word_indexes.len() * 4;
+        let batch_size = word_indexes.len() * CONTEXT_SIZE;
         let x = Tensor::from_vec(x, (batch_size, 1), &word2vec::DEVICE)?;
         let y = Tensor::from_vec(y, (batch_size, 1), &word2vec::DEVICE)?;
         Ok(Self { y, x })

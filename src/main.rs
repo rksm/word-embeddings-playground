@@ -12,6 +12,9 @@ use word_embeddings_playground::word2vec;
 #[derive(Parser)]
 struct Args {
     #[clap(long, action, default_value = "false")]
+    build_vocab: bool,
+
+    #[clap(long, action, default_value = "false")]
     adjust_learning_rate: bool,
 
     #[clap(short = 'f', long)]
@@ -31,8 +34,12 @@ fn main() {
 }
 
 fn run(args: Args) -> Result<()> {
-    // let vocab = vocab_builder::Vocab::build_from_scratch().expect("Failed to build vocab");
-    let vocab = vocab_builder::Vocab::from_files().expect("Failed to build vocab");
+    let vocab = if args.build_vocab {
+        vocab_builder::Vocab::build_from_scratch(false, false).expect("Failed to build vocab")
+    } else {
+        vocab_builder::Vocab::from_files().expect("Failed to build vocab")
+    };
+
     let n = dbg!(vocab.n());
 
     if false {
@@ -46,8 +53,6 @@ fn run(args: Args) -> Result<()> {
     }
 
     println!("----------------");
-
-    let nn_file = PathBuf::from("data/doppelgaenger/word2vec.nn");
 
     // if false {
     //     let nn = word2vec::Word2VecCbow::load(&nn_file, word2vec::EMBEDDING_SIZE)
@@ -80,7 +85,7 @@ fn run(args: Args) -> Result<()> {
 
         let mut training = match &args.model_file {
             Some(file) if file.exists() => {
-                word2vec::Training::load(args.method, args.learning_rate, nn_file)
+                word2vec::Training::load(args.method, args.learning_rate, file)
                     .expect("Failed to load")
             }
             _ => word2vec::Training::new(args.method, args.learning_rate, n)

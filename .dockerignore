@@ -3,3 +3,8 @@ target
 docker-target
 data
 .ipynb_checkpoints
+flamegraph.svg
+gecko-profile.json
+perf.data.old
+perf.data
+.idea

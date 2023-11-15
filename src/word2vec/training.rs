@@ -99,7 +99,11 @@ impl Training {
 
                 let logits = self.nn.forward(x, y).expect("Failed to forward");
 
-                let y = y.squeeze(1)?;
+                let y = if y.shape().dims().len() == 1 {
+                    y.clone()
+                } else {
+                    y.squeeze(1)?
+                };
 
                 let loss = loss::cross_entropy(&logits, &y).expect("Failed to compute loss");
                 // let loss = loss::nll(&logits, &y).expect("Failed to compute loss");
@@ -126,6 +130,8 @@ impl Training {
     }
 
     fn epoch_step(&mut self) {
+        std::process::exit(0);
+
         self.avg_loss = 0.0;
         self.epoch += 1;
         self.batch = 0;

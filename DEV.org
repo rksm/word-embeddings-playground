@@ -96,3 +96,10 @@ similarity: "gallone" vs "verkabelung" = 0.5104818
 similarity: "rückzug" vs "klassifiziert" = 0.5037153
 
 #+END_QUOTE
+
+* profiling
+#+begin_src shell
+sudo chown robert ./docker-target/perf.data
+cp ./docker-target/perf.data ./perf.data
+perf script report gecko --save-only gecko-profile.json
+#+end_src
